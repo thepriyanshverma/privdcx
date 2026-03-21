@@ -1,0 +1,143 @@
+DEBUG: GET /docs
+INFO:     172.18.0.1:60910 - "GET /docs HTTP/1.1" 200 OK
+DEBUG: GET /openapi.json
+INFO:     172.18.0.1:60910 - "GET /openapi.json HTTP/1.1" 200 OK
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:46908 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:46908 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:46920 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:46920 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/organizations
+INFO:     172.18.0.1:46920 - "OPTIONS /api/v1/tenants/organizations HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/organizations
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:46920 - "GET /api/v1/tenants/organizations HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:46920 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: POST /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:46908 - "POST /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:46908 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:46920 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:46908 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:46908 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/auth/login
+INFO:     172.18.0.1:59462 - "OPTIONS /api/v1/tenants/auth/login HTTP/1.1" 200 OK
+DEBUG: POST /api/v1/tenants/auth/login
+INFO:     172.18.0.1:59462 - "POST /api/v1/tenants/auth/login HTTP/1.1" 200 OK
+DEBUG: OPTIONS /api/v1/tenants/auth/me
+INFO:     172.18.0.1:59462 - "OPTIONS /api/v1/tenants/auth/me HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/auth/me
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:59476 - "GET /api/v1/tenants/auth/me HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:59476 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:59462 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:59476 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:59462 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/organizations
+INFO:     172.18.0.1:59462 - "OPTIONS /api/v1/tenants/organizations HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/organizations
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:59476 - "GET /api/v1/tenants/organizations HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:59476 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: POST /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:59462 - "POST /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/organizations
+INFO:     172.18.0.1:52854 - "OPTIONS /api/v1/tenants/organizations HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/organizations
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:52854 - "GET /api/v1/tenants/organizations HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:52854 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: POST /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:52870 - "POST /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:52870 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:52854 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:52870 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:52854 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/organizations
+INFO:     172.18.0.1:52854 - "OPTIONS /api/v1/tenants/organizations HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/organizations
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:52870 - "GET /api/v1/tenants/organizations HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:52870 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: POST /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:52854 - "POST /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+2026-03-21 11:16:28 [warning  ] RabbitMQ not ready, retrying... error=[Errno 111] Connect call failed ('172.18.0.12', 5672) retries_left=30
+2026-03-21 11:16:33 [warning  ] RabbitMQ not ready, retrying... error=[Errno 111] Connect call failed ('172.18.0.12', 5672) retries_left=29
+2026-03-21 11:16:38 [warning  ] RabbitMQ not ready, retrying... error=[Errno 111] Connect call failed ('172.18.0.12', 5672) retries_left=28
+2026-03-21 11:16:43 [warning  ] RabbitMQ not ready, retrying... error=[Errno 111] Connect call failed ('172.18.0.12', 5672) retries_left=27
+DEBUG: GET /docs
+INFO:     172.18.0.1:54080 - "GET /docs HTTP/1.1" 200 OK
+DEBUG: GET /openapi.json
+INFO:     172.18.0.1:54080 - "GET /openapi.json HTTP/1.1" 200 OK
+DEBUG: OPTIONS /api/v1/tenants/auth/login
+INFO:     172.18.0.1:50642 - "OPTIONS /api/v1/tenants/auth/login HTTP/1.1" 200 OK
+DEBUG: POST /api/v1/tenants/auth/login
+INFO:     172.18.0.1:50642 - "POST /api/v1/tenants/auth/login HTTP/1.1" 200 OK
+DEBUG: OPTIONS /api/v1/tenants/auth/me
+INFO:     172.18.0.1:50642 - "OPTIONS /api/v1/tenants/auth/me HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/auth/me
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:50646 - "GET /api/v1/tenants/auth/me HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:50646 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:50642 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:50646 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: GET /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:50642 - "GET /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/organizations
+INFO:     172.18.0.1:50642 - "OPTIONS /api/v1/tenants/organizations HTTP/1.1" 200 OK
+DEBUG: GET /api/v1/tenants/organizations
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:50646 - "GET /api/v1/tenants/organizations HTTP/1.1" 401 Unauthorized
+DEBUG: OPTIONS /api/v1/tenants/workspaces
+INFO:     172.18.0.1:50646 - "OPTIONS /api/v1/tenants/workspaces HTTP/1.1" 200 OK
+DEBUG: POST /api/v1/tenants/workspaces
+DEBUG Auth: Attempting to decode token with secret starting with: infra...
+INFO:     172.18.0.1:50642 - "POST /api/v1/tenants/workspaces HTTP/1.1" 401 Unauthorized
+
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+/usr/local/lib/python3.11/site-packages/fastapi/openapi/utils.py:207: UserWarning: Duplicate Operation ID gateway_proxy_endpoint for function gateway_proxy at /app/app/main.py
+  warnings.warn(message, stacklevel=1)
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+/usr/local/lib/python3.11/site-packages/fastapi/openapi/utils.py:207: UserWarning: Duplicate Operation ID gateway_proxy_endpoint for function gateway_proxy at /app/app/main.py
+  warnings.warn(message, stacklevel=1)

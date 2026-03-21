@@ -1,0 +1,237 @@
+services:
+  # ─── Data Persistence ──────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: infraos-postgres
+    environment:
+      POSTGRES_USER: infraos
+      POSTGRES_PASSWORD: infraos_password
+      POSTGRES_DB: infraos_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:6
+    container_name: infraos-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: infraos
+      MONGO_INITDB_ROOT_PASSWORD: infraos_password
+      MONGO_INITDB_DATABASE: infraos_sim
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+    restart: unless-stopped
+
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: infraos-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: infraos-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: infraos
+      RABBITMQ_DEFAULT_PASS: infraos_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  # ─── Microservices ──────────────────────────────────────────────────────────
+  infra-tenant:
+    build: ./services/infra-tenant
+    container_name: infraos-tenant
+    ports:
+      - "8005:8005"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://infraos:infraos_password@postgres:5432/infraos_db
+      - SECRET_KEY=infraos_super_secret_key_for_jwt_32_chars
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  infra-facility:
+    build: ./services/infra-facility
+    container_name: infraos-facility
+    ports:
+      - "8006:8006"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://infraos:infraos_password@postgres:5432/infraos_db
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  infra-rack:
+    build: ./services/infra-rack
+    container_name: infraos-rack
+    ports:
+      - "8007:8007"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://infraos:infraos_password@postgres:5432/infraos_db
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  infra-device:
+    build: ./services/infra-device
+    container_name: infraos-device
+    ports:
+      - "8008:8008"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://infraos:infraos_password@postgres:5432/infraos_db
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  infra-simulation:
+    build: ./services/infra-simulation
+    container_name: infraos-simulation
+    ports:
+      - "8010:8010"
+    environment:
+      - MONGO_URL=mongodb://infraos:infraos_password@mongodb:27017
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: infraos-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - infra-simulation
+    restart: unless-stopped
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: infraos-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: infraos-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    restart: unless-stopped
+
+  infra-metrics-stream:
+    build: ./services/infra-metrics-stream
+    container_name: infraos-metrics-stream
+    ports:
+      - "8011:8011"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - PROMETHEUS_URL=http://prometheus:9090
+    depends_on:
+      - prometheus
+      - kafka
+    restart: unless-stopped
+
+  infra-alert-engine:
+    build: ./services/infra-alert-engine
+    container_name: infraos-alert-engine
+    ports:
+      - "8012:8012"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - RABBITMQ_URL=amqp://infraos:infraos_password@rabbitmq:5672/
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - kafka
+      - rabbitmq
+      - redis
+    restart: unless-stopped
+
+  infra-runtime:
+    build: ./services/infra-runtime
+    container_name: infraos-runtime
+    ports:
+      - "8013:8013"
+    environment:
+      - RABBITMQ_URL=amqp://infraos:infraos_password@rabbitmq:5672/
+      - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=mongodb://infraos:infraos_password@mongodb:27017
+    depends_on:
+      - rabbitmq
+      - redis
+      - mongodb
+    restart: unless-stopped
+
+  infra-invitation:
+    build: ./services/infra-invitation-service
+    container_name: infraos-invitation
+    ports:
+      - "8014:8014"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://infraos:infraos_password@postgres:5432/infraos_db
+      - TENANT_SERVICE_URL=http://infra-tenant:8005/api/v1
+      - SECRET_KEY=infraos_super_secret_key_for_jwt_32_chars
+    depends_on:
+      - postgres
+      - infra-tenant
+    restart: unless-stopped
+
+  infra-gateway:
+    build: ./services/infra-gateway
+    container_name: infraos-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - RABBITMQ_URL=amqp://infraos:infraos_password@rabbitmq:5672/
+      - JWT_SECRET=infraos_super_secret_key_for_jwt_32_chars
+    depends_on:
+      - infra-tenant
+      - infra-facility
+      - infra-rack
+      - infra-device
+      - infra-simulation
+      - infra-metrics-stream
+      - infra-alert-engine
+      - infra-runtime
+      - infra-invitation
+      - rabbitmq
+    restart: unless-stopped
+
+  frontend:
+    build: ./network-sim
+    container_name: infraos-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  mongodata:
+  redisdata:
+  rabbitmqdata:
