@@ -29,6 +29,18 @@ class InventoryService:
         
         return await self.device_repo.create(dev_data)
 
+    async def get_device(self, id: uuid.UUID) -> Optional[Device]:
+        return await self.device_repo.get(id)
+
+    async def delete_device(self, id: uuid.UUID) -> bool:
+        return await self.device_repo.delete(id)
+
+    async def move_device(self, id: uuid.UUID, rack_id: uuid.UUID, start_u: Optional[int] = None) -> Optional[Device]:
+        update_data: dict[str, Any] = {"rack_id": rack_id}
+        if start_u is not None:
+            update_data["start_u"] = start_u
+        return await self.device_repo.update(id, update_data)
+
     async def bulk_deploy(self, request: BulkDeployRequest) -> List[Device]:
         template = await self.template_repo.get(request.template_id)
         if not template: raise ValueError("Template not found")
@@ -68,3 +80,17 @@ class InventoryService:
 
     async def create_template(self, template_in: DeviceTemplateCreate) -> DeviceTemplate:
         return await self.template_repo.create(template_in.model_dump())
+
+    async def list_devices(
+        self,
+        workspace_id: Optional[uuid.UUID] = None,
+        rack_id: Optional[uuid.UUID] = None,
+        skip: int = 0,
+        limit: int = 1000,
+    ) -> List[Device]:
+        return await self.device_repo.list_filtered(
+            workspace_id=workspace_id,
+            rack_id=rack_id,
+            skip=skip,
+            limit=limit,
+        )

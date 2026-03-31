@@ -20,6 +20,7 @@ class RoleName(str, Enum):
     # Organization Roles
     ORG_OWNER = "org_owner"
     ORG_ADMIN = "org_admin"
+    ORG_MEMBER = "org_member"
     ORG_BILLING_ADMIN = "org_billing_admin"
     
     # Workspace Roles
@@ -46,6 +47,7 @@ class User(Base):
     last_workspace_id: Mapped[Optional[uuid.UUID]] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     
     role_assignments: Mapped[List["RoleAssignment"]] = relationship(back_populates="user")
+    organization_memberships: Mapped[List["OrganizationMembership"]] = relationship(back_populates="user", foreign_keys="OrganizationMembership.user_id")
 
 class Organization(Base):
     __tablename__ = "organizations"
@@ -58,6 +60,7 @@ class Organization(Base):
     
     workspaces: Mapped[List["Workspace"]] = relationship(back_populates="organization")
     subscriptions: Mapped[List["Subscription"]] = relationship(back_populates="organization")
+    memberships: Mapped[List["OrganizationMembership"]] = relationship(back_populates="organization")
 
 class Workspace(Base):
     __tablename__ = "workspaces"
@@ -105,3 +108,18 @@ class RoleAssignment(Base):
     scope_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True)) # ID of org, workspace, or logical_space
     
     user: Mapped["User"] = relationship(back_populates="role_assignments")
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    
+    id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("organizations.id"))
+    user_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id"))
+    role: Mapped[RoleName] = mapped_column(SQLEnum(RoleName))
+    status: Mapped[str] = mapped_column(String(50), default="active") # active, invited, suspended
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    invited_by: Mapped[Optional[uuid.UUID]] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    
+    organization: Mapped["Organization"] = relationship(back_populates="memberships")
+    user: Mapped["User"] = relationship(back_populates="organization_memberships", foreign_keys=[user_id])
+    inviter: Mapped[Optional["User"]] = relationship(foreign_keys=[invited_by])

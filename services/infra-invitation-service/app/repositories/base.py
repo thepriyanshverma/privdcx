@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import Base
-from app.models.domain import Invitation, WorkspaceMembership, hash_token
+from app.models.domain import Invitation, WorkspaceMembership, ScopeType, hash_token
 
 T = TypeVar("T", bound=Base)
 
@@ -45,6 +45,12 @@ class InvitationRepository(BaseRepository[Invitation]):
         )
         return result.scalars().first()
 
+    async def get_by_code(self, code: str) -> Optional[Invitation]:
+        result = await self.session.execute(
+            select(Invitation).filter_by(code=code)
+        )
+        return result.scalars().first()
+
     async def list_for_workspace(
         self,
         workspace_id: uuid.UUID,
@@ -63,6 +69,31 @@ class InvitationRepository(BaseRepository[Invitation]):
         if viewer_role in owner_roles:
             pass  # see all
         elif viewer_role == "infra_architect":
+            q = q.where(Invitation.invited_by == viewer_user_id)
+        else:
+            return []
+
+        result = await self.session.execute(q)
+        return result.scalars().all()
+
+    async def list_for_organization(
+        self,
+        org_id: uuid.UUID,
+        viewer_role: str,
+        viewer_user_id: uuid.UUID,
+    ) -> List[Invitation]:
+        """
+        RBAC-scoped listing for organization:
+         - org_owner    → all invitations
+         - org_admin    → only invitations they created (or all? usually admin sees all)
+         - org_member   → empty
+        """
+        owner_roles = {"org_owner"}
+        q = select(Invitation).filter_by(scope_id=org_id, scope_type=ScopeType.ORG)
+
+        if viewer_role in owner_roles:
+            pass  # see all
+        elif viewer_role == "org_admin":
             q = q.where(Invitation.invited_by == viewer_user_id)
         else:
             return []

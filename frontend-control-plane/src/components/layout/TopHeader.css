@@ -1,0 +1,90 @@
+/* src/components/layout/TopHeader.css */
+.top-header {
+  height: 48px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  justify-content: space-between;
+}
+
+.top-header__brand {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--accent-color);
+  letter-spacing: 0.5px;
+}
+
+.top-header__context {
+  display: flex;
+  gap: 16px;
+  font-family: monospace;
+  font-size: 12px;
+  background-color: var(--bg-primary);
+  padding: 4px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.context-item {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.context-label {
+  color: var(--text-muted);
+}
+
+.context-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.context-sep {
+  color: var(--border-color);
+}
+
+.top-header__right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ws-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.ws-indicator--connected {
+  background-color: #28a745;
+  box-shadow: 0 0 4px #28a745;
+}
+
+.ws-indicator--connecting,
+.ws-indicator--reconnecting {
+  background-color: #ffc107;
+  animation: pulse 1s infinite alternate;
+}
+
+.ws-indicator--error,
+.ws-indicator--disconnected {
+  background-color: var(--danger-color);
+}
+
+@keyframes pulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+.user-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.logout-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+}

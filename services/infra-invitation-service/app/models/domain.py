@@ -33,6 +33,7 @@ class Invitation(Base):
     __tablename__ = "invitations"
 
     id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(String(12), unique=True, index=True) # Human-readable invite code
     email: Mapped[str] = mapped_column(String(255), index=True)
     role: Mapped[str] = mapped_column(String(50))
     scope_type: Mapped[ScopeType] = mapped_column(SQLEnum(ScopeType))

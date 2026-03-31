@@ -10,9 +10,26 @@ from app.schemas.domain import (
 from typing import List, Optional
 import uuid
 import os
+import httpx
 from jose import jwt, JWTError
 
 router = APIRouter()
+
+
+def normalize_org_role(role: str) -> str:
+    if role == "member":
+        return "org_member"
+    return role
+
+
+def normalize_scope_type(scope_type: str) -> str:
+    raw = scope_type.value if hasattr(scope_type, "value") else scope_type
+    s = str(raw or "").lower().strip()
+    if s in ("org", "organization"):
+        return "org"
+    if s == "workspace":
+        return "workspace"
+    return s
 
 # ─── JWT Auth (matches infra-tenant security config) ──────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY", "SUPER_SECRET_KEY_FOR_DEV_ONLY")
@@ -142,6 +159,7 @@ async def create_invite(
     """Create invitation. Raw token returned ONCE — never shown again."""
     resolved = await get_caller_with_workspace_role(workspace_id, caller, db)
     invite_in.scope_id = workspace_id
+    invite_in.scope_type = "workspace"
     svc = InvitationService(db)
     invite, raw_token = await svc.create_invitation(
         invite_in,
@@ -154,7 +172,7 @@ async def create_invite(
 
 
 @router.post("/workspace/{workspace_id}/invite/{invitation_id}/revoke")
-async def revoke_invite(
+async def revoke_invite_workspace(
     workspace_id: uuid.UUID,
     invitation_id: uuid.UUID,
     caller: dict = Depends(get_caller),
@@ -163,6 +181,100 @@ async def revoke_invite(
     resolved = await get_caller_with_workspace_role(workspace_id, caller, db)
     svc = InvitationService(db)
     await svc.revoke_invitation(invitation_id, resolved["user_id"], resolved["user_role"])
+    return {"status": "revoked", "invitation_id": str(invitation_id)}
+
+
+# ─── Organization Member & Invitation Endpoints ─────────────────────────────────
+
+@router.get("/organization/{org_id}/members", response_model=List[WorkspaceMemberRead])
+async def list_org_members(
+    org_id: uuid.UUID,
+    caller: dict = Depends(get_caller),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List members of an organization. 
+    Note: For now, we reuse WorkspaceMemberRead as the schema is identical.
+    """
+    svc = InvitationService(db)
+    # Organization roles are passed directly in the JWT since Phase 1
+    return await svc.get_organization_members(org_id, auth_token=caller.get("raw_token"))
+
+
+@router.get("/organization/{org_id}/invites", response_model=List[InvitationRead])
+async def list_org_invitations(
+    org_id: uuid.UUID,
+    caller: dict = Depends(get_caller),
+    db: AsyncSession = Depends(get_db),
+):
+    svc = InvitationService(db)
+    invitations = await svc.get_organization_invitations(
+        org_id, caller["user_role"], caller["user_id"]
+    )
+    return [InvitationRead.model_validate(inv) for inv in invitations]
+
+
+@router.post("/organization/{org_id}/invite", response_model=InvitationCreatedResponse)
+async def create_org_invite(
+    org_id: uuid.UUID,
+    invite_in: InvitationCreate,
+    caller: dict = Depends(get_caller),
+    db: AsyncSession = Depends(get_db),
+):
+    invite_in.role = normalize_org_role(invite_in.role)
+    invite_in.scope_id = org_id
+    invite_in.scope_type = "org"
+    svc = InvitationService(db)
+    invite, raw_token = await svc.create_invitation(
+        invite_in,
+        invited_by=caller["user_id"],
+        invited_by_role=caller["user_role"],
+    )
+    invite_dict = InvitationRead.model_validate(invite).model_dump()
+    invite_dict["token"] = raw_token
+    return InvitationCreatedResponse(**invite_dict)
+
+
+@router.post("", response_model=InvitationCreatedResponse)
+async def create_scoped_invite(
+    invite_in: InvitationCreate,
+    caller: dict = Depends(get_caller),
+    db: AsyncSession = Depends(get_db),
+):
+    scope_type = normalize_scope_type(invite_in.scope_type)
+    print(f"DEBUG Invitation: Received scope_type='{invite_in.scope_type}' -> normalized to '{scope_type}'")
+    
+    if not invite_in.scope_id:
+        raise HTTPException(status_code=422, detail="scope_id is required")
+
+    if scope_type == "org":
+        invite_in.scope_type = "org"
+        invite_in.role = normalize_org_role(invite_in.role)
+    elif scope_type == "workspace":
+        invite_in.scope_type = "workspace"
+    else:
+        raise HTTPException(status_code=422, detail=f"scope_type '{invite_in.scope_type}' must be organization/org or workspace")
+
+    svc = InvitationService(db)
+    invite, raw_token = await svc.create_invitation(
+        invite_in,
+        invited_by=caller["user_id"],
+        invited_by_role=caller["user_role"],
+    )
+    invite_dict = InvitationRead.model_validate(invite).model_dump()
+    invite_dict["token"] = raw_token
+    return InvitationCreatedResponse(**invite_dict)
+
+
+@router.post("/organization/{org_id}/invite/{invitation_id}/revoke")
+async def revoke_invite_org(
+    org_id: uuid.UUID,
+    invitation_id: uuid.UUID,
+    caller: dict = Depends(get_caller),
+    db: AsyncSession = Depends(get_db),
+):
+    svc = InvitationService(db)
+    await svc.revoke_invitation(invitation_id, caller["user_id"], caller["user_role"])
     return {"status": "revoked", "invitation_id": str(invitation_id)}
 
 
@@ -191,6 +303,70 @@ async def get_invite_by_token(token: str, db: AsyncSession = Depends(get_db)):
     invite = await svc.get_invitation_by_token(token)
     return InvitationRead.model_validate(invite)
 
+@router.get("/codes/{code}", response_model=InvitationRead)
+async def get_invite_by_code(code: str, db: AsyncSession = Depends(get_db)):
+    from app.repositories.base import InvitationRepository
+    repo = InvitationRepository(db)
+    invite = await repo.get_by_code(code.upper())
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation code not found")
+    return InvitationRead.model_validate(invite)
+
+
+@router.post("/codes/{code}/accept", response_model=InvitationRead)
+async def accept_invite_by_code(
+    code: str,
+    accept_in: InvitationAccept,
+    caller: dict = Depends(get_caller),
+    db: AsyncSession = Depends(get_db),
+):
+    """Accept an invitation using its 12-character code (shown once at creation)."""
+    from app.repositories.base import InvitationRepository
+    from app.models.domain import InvitationStatus, MembershipStatus, ScopeType
+    from datetime import datetime
+    repo = InvitationRepository(db)
+    invite = await repo.get_by_code(code.upper())
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation code not found")
+    if invite.status != InvitationStatus.PENDING:
+        raise HTTPException(status_code=400, detail=f"Invitation is {invite.status.value}.")
+    # Validate email match
+    if invite.email.lower() != accept_in.email.lower():
+        raise HTTPException(status_code=403, detail="This invitation was issued to a different email address.")
+    svc = InvitationService(db)
+    if invite.scope_type == ScopeType.WORKSPACE:
+        existing = await svc.mem_repo.get_by_user_and_workspace(caller["user_id"], invite.scope_id)
+        if existing:
+            raise HTTPException(status_code=409, detail="You are already a member of this scope.")
+        await svc.mem_repo.create({
+            "user_id": caller["user_id"],
+            "user_email": accept_in.email,
+            "workspace_id": invite.scope_id,
+            "role": invite.role,
+            "status": MembershipStatus.ACTIVE,
+            "invited_by": invite.invited_by,
+            "invitation_id": invite.id,
+        })
+    elif invite.scope_type == ScopeType.ORG:
+        tenant_url = os.getenv("TENANT_SERVICE_URL", "http://infra-tenant:8005/api/v1")
+        org_role = normalize_org_role(invite.role)
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{tenant_url}/organizations/{invite.scope_id}/members",
+                params={"user_id": str(caller["user_id"]), "role": org_role},
+                timeout=10.0,
+            )
+            if resp.status_code not in (200, 201):
+                raise HTTPException(status_code=resp.status_code, detail="Failed to join organization via invite.")
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported invitation scope for code acceptance.")
+
+    invite.status = InvitationStatus.ACCEPTED
+    invite.accepted_at = datetime.utcnow()
+    await svc.inv_repo.session.commit()
+    await svc.inv_repo.session.refresh(invite)
+    return InvitationRead.model_validate(invite)
+
 
 @router.post("/invitations/accept", response_model=InvitationRead)
 async def accept_invite_legacy(
@@ -198,16 +374,64 @@ async def accept_invite_legacy(
     caller: dict = Depends(get_caller),
     db: AsyncSession = Depends(get_db),
 ):
+    # Support both raw token and invite code in the same endpoint.
+    from app.repositories.base import InvitationRepository
+    from app.models.domain import InvitationStatus, MembershipStatus, ScopeType
+    from datetime import datetime
+
     svc = InvitationService(db)
+    token_or_code = (accept_in.token or "").strip()
+    repo = InvitationRepository(db)
+
+    invite = await repo.get_by_code(token_or_code.upper())
+    if invite:
+        if invite.status != InvitationStatus.PENDING:
+            raise HTTPException(status_code=400, detail=f"Invitation is {invite.status.value}.")
+        if invite.email.lower() != accept_in.email.lower():
+            raise HTTPException(status_code=403, detail="This invitation was issued to a different email address.")
+
+        if invite.scope_type == ScopeType.WORKSPACE:
+            existing = await svc.mem_repo.get_by_user_and_workspace(caller["user_id"], invite.scope_id)
+            if existing:
+                raise HTTPException(status_code=409, detail="You are already a member of this scope.")
+            await svc.mem_repo.create({
+                "user_id": caller["user_id"],
+                "user_email": accept_in.email,
+                "workspace_id": invite.scope_id,
+                "role": invite.role,
+                "status": MembershipStatus.ACTIVE,
+                "invited_by": invite.invited_by,
+                "invitation_id": invite.id,
+            })
+        elif invite.scope_type == ScopeType.ORG:
+            tenant_url = os.getenv("TENANT_SERVICE_URL", "http://infra-tenant:8005/api/v1")
+            org_role = normalize_org_role(invite.role)
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{tenant_url}/organizations/{invite.scope_id}/members",
+                    params={"user_id": str(caller["user_id"]), "role": org_role},
+                    timeout=10.0,
+                )
+                if resp.status_code not in (200, 201):
+                    raise HTTPException(status_code=resp.status_code, detail="Failed to join organization via invite.")
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported invitation scope.")
+
+        invite.status = InvitationStatus.ACCEPTED
+        invite.accepted_at = datetime.utcnow()
+        await svc.inv_repo.session.commit()
+        await svc.inv_repo.session.refresh(invite)
+        return InvitationRead.model_validate(invite)
+
     invite = await svc.accept_invitation(
-        raw_token=accept_in.token,
+        raw_token=token_or_code,
         caller_email=accept_in.email,
         caller_user_id=caller["user_id"],
     )
     return InvitationRead.model_validate(invite)
 
 
-@router.get("/invitations", response_model=List[InvitationRead])
+@router.get("", response_model=List[InvitationRead])
 async def list_invitations_legacy(
     scope_id: Optional[uuid.UUID] = Query(None),
     caller: dict = Depends(get_caller),

@@ -4,3 +4,13 @@ __pycache__/
 *.pyc
 *.log
 .env
+# Custom local and debug files
+github_commands
+docker_commands
+debug_error.png
+all_gateway_logs.txt
+debug_auth.txt
+extract_token.py
+test_auth.py
+test_jwt.py
+infra_flow_sample.json

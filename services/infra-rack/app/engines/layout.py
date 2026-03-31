@@ -36,6 +36,8 @@ class LayoutEngine:
                     "column_index": c,
                     "aisle_type": aisle_type,
                     "rack_type": params.rack_type,
+                    "width_mm": 600,
+                    "depth_mm": 1100,
                     "allocation_state": AllocationState.FREE
                 }
                 racks.append(rack_data)

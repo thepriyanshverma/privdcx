@@ -34,6 +34,36 @@ class OrganizationRead(OrganizationBase):
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
+class OrganizationMembershipBase(BaseModel):
+    organization_id: uuid.UUID
+    user_id: uuid.UUID
+    role: RoleName
+    status: str = "active"
+
+class OrganizationMembershipCreate(OrganizationMembershipBase):
+    invited_by: Optional[uuid.UUID] = None
+
+class OrganizationMembershipRead(OrganizationMembershipBase):
+    id: uuid.UUID
+    joined_at: datetime
+    invited_by: Optional[uuid.UUID] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class OrganizationMemberRead(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    organization_id: uuid.UUID
+    user_email: str
+    full_name: str
+    role: RoleName
+    status: str
+    joined_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class OrganizationWithRoleRead(OrganizationRead):
+    role: RoleName
+
+
 class WorkspaceBase(BaseModel):
     name: str
     region: str
@@ -92,6 +122,7 @@ class RoleAssignmentRead(RoleAssignmentBase):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    state: Optional[str] = None # e.g. "ORG_REQUIRED"
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -100,3 +131,7 @@ class UserLogin(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
     user_id: Optional[uuid.UUID] = None
+
+class TokenContextRequest(BaseModel):
+    org_id: Optional[uuid.UUID] = None
+    workspace_id: Optional[uuid.UUID] = None

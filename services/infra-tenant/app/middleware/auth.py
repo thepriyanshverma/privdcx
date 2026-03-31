@@ -51,10 +51,18 @@ async def inject_tenant_context(request: Request):
     workspace_id = request.headers.get("X-Workspace-Id")
     logical_space_id = request.headers.get("X-Logical-Space-Id")
     
+    def safe_uuid(v: Optional[str]) -> Optional[uuid.UUID]:
+        if not v or v in ("undefined", "null", "None", ""):
+            return None
+        try:
+            return uuid.UUID(v)
+        except (ValueError, TypeError):
+            return None
+
     request.state.tenant = TenantContext(
-        org_id=uuid.UUID(org_id) if org_id else None,
-        workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
-        logical_space_id=uuid.UUID(logical_space_id) if logical_space_id else None
+        org_id=safe_uuid(org_id),
+        workspace_id=safe_uuid(workspace_id),
+        logical_space_id=safe_uuid(logical_space_id)
     )
 
 def check_permission(required_role: str, scope: ScopeType):

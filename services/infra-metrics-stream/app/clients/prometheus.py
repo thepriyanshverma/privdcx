@@ -1,53 +1,66 @@
 import httpx
-from typing import List, Dict, Any
+import asyncio
+from typing import List, Dict, Any, Optional
 import os
-from app.schemas.events import InfraMetricEvent
+import structlog
 
 class PrometheusClient:
-    def __init__(self, base_url: str = "http://prometheus:9090"):
-        self.base_url = base_url
-        self.client = httpx.AsyncClient(base_url=base_url, timeout=5.0)
+    def __init__(self, base_url: str | None = None):
+        self.base_url = base_url or os.getenv("PROMETHEUS_URL", "http://prometheus:9090")
+        self.timeout_s = float(os.getenv("PROMETHEUS_TIMEOUT_S", "5"))
+        self.retries = int(os.getenv("PROMETHEUS_QUERY_RETRIES", "2"))
+        self.retry_backoff_s = float(os.getenv("PROMETHEUS_RETRY_BACKOFF_S", "0.25"))
+        self.client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout_s)
+        self.logger = structlog.get_logger("infra-metrics-stream.prometheus")
 
-    async def query_metrics(self, query: str) -> List[InfraMetricEvent]:
+    async def query_vector(self, query: str) -> List[Dict[str, Any]]:
         """
-        Queries Prometheus and transforms vector results into InfraMetricEvents.
+        Queries Prometheus instant vector endpoint and returns raw metric samples.
+        Retries on transient failures.
         """
-        url = "/api/v1/query"
         params = {"query": query}
-        
-        try:
-            response = await self.client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-            if data["status"] != "success":
+        url = "/api/v1/query"
+        for attempt in range(self.retries + 1):
+            try:
+                response = await self.client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+                if data.get("status") != "success":
+                    self.logger.warning(
+                        "prometheus_query_unsuccessful",
+                        query=query,
+                        status=data.get("status"),
+                    )
+                    return []
+                result_type = data.get("data", {}).get("resultType")
+                if result_type != "vector":
+                    self.logger.warning(
+                        "prometheus_query_unexpected_type",
+                        query=query,
+                        result_type=result_type,
+                    )
+                    return []
+                return data.get("data", {}).get("result", [])
+            except Exception as exc:
+                if attempt < self.retries:
+                    await asyncio.sleep(self.retry_backoff_s * (attempt + 1))
+                    continue
+                self.logger.error(
+                    "prometheus_query_failed",
+                    query=query,
+                    attempts=attempt + 1,
+                    error=str(exc),
+                )
                 return []
-                
-            results = data["data"]["result"]
-            events = []
-            
-            for res in results:
-                metric = res["metric"]
-                value = float(res["value"][1])
-                timestamp = float(res["value"][0])
-                
-                # Enrich with labels
-                events.append(InfraMetricEvent(
-                    metric_name=metric.get("__name__", query),
-                    value=value,
-                    timestamp=timestamp,
-                    tenant_id=metric.get("tenant_id"),
-                    workspace_id=metric.get("workspace_id"),
-                    facility_id=metric.get("facility_id"),
-                    rack_id=metric.get("rack_id"),
-                    device_id=metric.get("device_id"),
-                    labels={k: v for k, v in metric.items() if k not in ["__name__", "tenant_id", "workspace_id", "facility_id", "rack_id", "device_id"]}
-                ))
-            return events
-        except Exception as e:
-            # In a real app, use structured logging here
-            print(f"Error querying Prometheus: {e}")
-            return []
+
+    async def query_scalar(self, query: str) -> Optional[float]:
+        rows = await self.query_vector(query)
+        if not rows:
+            return None
+        try:
+            return float(rows[0]["value"][1])
+        except Exception:
+            return None
 
     async def close(self):
         await self.client.aclose()
