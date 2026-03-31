@@ -114,6 +114,19 @@ export default function TopologyFilters({
                 }
                 onFilterChange('entity_id', event.target.value);
               }}
+              onPaste={(event) => {
+                const text = event.clipboardData?.getData('text');
+                if (typeof text !== 'string') return;
+                const start = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+                const end = event.currentTarget.selectionEnd ?? start;
+                const nextValue = `${event.currentTarget.value.slice(0, start)}${text}${event.currentTarget.value.slice(end)}`;
+                event.preventDefault();
+                if (onEntityInputChange) {
+                  onEntityInputChange(nextValue);
+                  return;
+                }
+                onFilterChange('entity_id', nextValue);
+              }}
               onBlur={(event) => {
                 if (onEntityInputCommit) onEntityInputCommit(event.target.value);
               }}

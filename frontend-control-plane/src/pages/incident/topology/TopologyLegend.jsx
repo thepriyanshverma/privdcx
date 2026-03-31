@@ -2,8 +2,29 @@ import { NODE_VISUAL } from './topologyModel';
 import { TopologyNodeShape } from './TopologySvgShapes';
 
 const NODE_ORDER = ['facility', 'hall', 'rack', 'device', 'network', 'power', 'cooling'];
+const NODE_LABELS = {
+  facility: 'FACILITY',
+  hall: 'HALL',
+  rack: 'RACK',
+  device: 'DEVICE',
+  network: 'NETWORK',
+  power: 'POWER',
+  cooling: 'COOLING',
+};
 
-export default function TopologyLegend({ className = '' }) {
+const EDGE_ITEMS = [
+  { id: 'structural', label: 'STRUCTURAL', stroke: '#6d8096', dash: '' },
+  { id: 'network', label: 'NETWORK', stroke: '#4da3ff', dash: '' },
+  { id: 'power', label: 'POWER', stroke: '#ffd13d', dash: '6 4' },
+  { id: 'cooling', label: 'COOLING', stroke: '#23d5be', dash: '2 3' },
+];
+
+export default function TopologyLegend({ className = '', stats, performanceMode = false }) {
+  const nodeCount = Number(stats?.nodes || 0);
+  const edgeCount = Number(stats?.edges || 0);
+  const rackCount = Number(stats?.racks || 0);
+  const deviceCount = Number(stats?.devices || 0);
+
   return (
     <div className={`topology-legend-panel ${className}`.trim()}>
       <div className="topology-legend-title">Legend</div>
@@ -20,26 +41,50 @@ export default function TopologyLegend({ className = '' }) {
                 strokeWidth={1}
               />
             </svg>
-            <span>{type.toUpperCase()}</span>
+            <span>{NODE_LABELS[type] || type.toUpperCase()}</span>
           </div>
         ))}
       </div>
       <div className="topology-legend-title topology-legend-title-sub">Edges</div>
       <div className="topology-legend-grid">
-        <div className="topology-legend-row">
-          <svg width="30" height="14" aria-hidden="true"><line x1="2" y1="7" x2="28" y2="7" stroke="#4da3ff" strokeWidth="2" opacity="0.7" /></svg>
-          <span>NETWORK</span>
+        {EDGE_ITEMS.map((edge) => (
+          <div key={edge.id} className="topology-legend-row">
+            <svg width="30" height="14" aria-hidden="true">
+              <line
+                x1="2"
+                y1="7"
+                x2="28"
+                y2="7"
+                stroke={edge.stroke}
+                strokeWidth="2"
+                strokeDasharray={edge.dash}
+                opacity="0.7"
+              />
+            </svg>
+            <span>{edge.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="topology-legend-title topology-legend-title-sub">Details</div>
+      <div className="topology-legend-details">
+        <div className="topology-legend-detail-row">
+          <span>Load</span>
+          <strong>{nodeCount > 0 ? `${nodeCount}N / ${edgeCount}E` : '--'}</strong>
         </div>
-        <div className="topology-legend-row">
-          <svg width="30" height="14" aria-hidden="true"><line x1="2" y1="7" x2="28" y2="7" stroke="#ffd13d" strokeWidth="2" strokeDasharray="6 4" opacity="0.7" /></svg>
-          <span>POWER</span>
+        <div className="topology-legend-detail-row">
+          <span>Inventory</span>
+          <strong>{rackCount > 0 || deviceCount > 0 ? `${rackCount}R / ${deviceCount}D` : '--'}</strong>
         </div>
-        <div className="topology-legend-row">
-          <svg width="30" height="14" aria-hidden="true"><line x1="2" y1="7" x2="28" y2="7" stroke="#23d5be" strokeWidth="2" strokeDasharray="2 3" opacity="0.7" /></svg>
-          <span>COOLING</span>
+        <div className="topology-legend-detail-row">
+          <span>Drag</span>
+          <strong>Node + neighbors</strong>
         </div>
+        <div className="topology-legend-detail-row">
+          <span>Labels</span>
+          <strong>{performanceMode ? 'Zoom-driven' : 'Detailed'}</strong>
+        </div>
+        <div className="topology-legend-note">Inner ring: temp/power, outer ring: network</div>
       </div>
     </div>
   );
 }
-

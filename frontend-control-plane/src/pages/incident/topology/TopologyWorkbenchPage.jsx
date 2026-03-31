@@ -88,6 +88,54 @@ function firstNumber(...values) {
   return null;
 }
 
+function createEmptyLiveRecord() {
+  return {
+    status: 'ACTIVE',
+    healthScore: null,
+    riskScore: null,
+    temperature: null,
+    power: null,
+    networkUsage: null,
+    metricName: null,
+    metricValue: null,
+    deviceType: null,
+    lastTimestamp: null,
+  };
+}
+
+function mergeLiveMetricsPayload(record, metrics) {
+  if (!record || !metrics || typeof metrics !== 'object') return;
+
+  const temperature = firstNumber(metrics.temperature, metrics.temp_c, metrics.temp);
+  const power = firstNumber(
+    metrics.power,
+    metrics.power_kw,
+    metrics.powerKw,
+    metrics.power_mw !== undefined ? Number(metrics.power_mw) * 1000 : null
+  );
+  const networkUsage = firstNumber(metrics.networkUsage, metrics.network, metrics.network_mbps, metrics.network_pct);
+  const healthScore = firstNumber(metrics.healthScore, metrics.health_score, metrics.health);
+  const riskScore = firstNumber(metrics.riskScore, metrics.risk_score, metrics.risk);
+
+  if (temperature !== null) record.temperature = temperature;
+  if (power !== null) record.power = power;
+  if (networkUsage !== null) record.networkUsage = networkUsage;
+  if (healthScore !== null) record.healthScore = healthScore;
+  if (riskScore !== null) record.riskScore = riskScore;
+
+  if (metrics.metricName) record.metricName = metrics.metricName;
+  if (metrics.metricValue !== undefined && metrics.metricValue !== null) {
+    const numericMetricValue = Number(metrics.metricValue);
+    record.metricValue = Number.isFinite(numericMetricValue) ? numericMetricValue : metrics.metricValue;
+  }
+
+  const deviceType = String(metrics.deviceType || metrics.device_type || '').trim();
+  if (deviceType) record.deviceType = deviceType;
+
+  const status = String(metrics.status || metrics.state || '').trim();
+  if (status) record.status = normalizeRuntimeStatus(status);
+}
+
 function resolveDeviceKind(node, liveRecord = null) {
   const rawKind = String(
     liveRecord?.deviceType
@@ -160,14 +208,21 @@ export default function TopologyWorkbenchPage() {
   }, [baseModel, filters.facility_id, filters.severity]);
 
   useEffect(() => {
+    if (viewMode === '3d') {
+      setViewMode('radial');
+    }
+  }, [viewMode]);
+
+  useEffect(() => {
     setEntityInputValue(filters.entity_id || '');
   }, [filters.entity_id]);
 
   useEffect(() => {
     const nextEntityId = String(filters.entity_id || '').trim();
     if (!nextEntityId) return;
+    if (!baseModel.nodeById.has(nextEntityId)) return;
     setSelectedEntityId(nextEntityId);
-  }, [filters.entity_id]);
+  }, [filters.entity_id, baseModel]);
 
   const blastData = useMemo(() => {
     if (!blastMode || !selectedEntityId) return null;
@@ -278,18 +333,7 @@ export default function TopologyWorkbenchPage() {
         if (!entityId) return;
 
         if (!nextLive[entityId]) {
-          nextLive[entityId] = {
-            status: 'ACTIVE',
-            healthScore: null,
-            riskScore: null,
-            temperature: null,
-            power: null,
-            networkUsage: null,
-            metricName: null,
-            metricValue: null,
-            deviceType: null,
-            lastTimestamp: null,
-          };
+          nextLive[entityId] = createEmptyLiveRecord();
         }
 
         const record = nextLive[entityId];
@@ -347,42 +391,10 @@ export default function TopologyWorkbenchPage() {
         if (!key || !metrics || typeof metrics !== 'object') return;
 
         if (!nextLive[key]) {
-          nextLive[key] = {
-            status: 'ACTIVE',
-            healthScore: null,
-            riskScore: null,
-            temperature: null,
-            power: null,
-            networkUsage: null,
-            metricName: null,
-            metricValue: null,
-            deviceType: null,
-            lastTimestamp: null,
-          };
+          nextLive[key] = createEmptyLiveRecord();
         }
 
-        const record = nextLive[key];
-        const temperature = firstNumber(metrics.temperature, metrics.temp_c, metrics.temp);
-        const power = firstNumber(
-          metrics.power,
-          metrics.power_kw,
-          metrics.powerKw,
-          metrics.power_mw !== undefined ? Number(metrics.power_mw) * 1000 : null
-        );
-        const networkUsage = firstNumber(metrics.networkUsage, metrics.network, metrics.network_mbps, metrics.network_pct);
-
-        if (temperature !== null) record.temperature = temperature;
-        if (power !== null) record.power = power;
-        if (networkUsage !== null) record.networkUsage = networkUsage;
-
-        if (metrics.metricName) record.metricName = metrics.metricName;
-        if (metrics.metricValue !== undefined && metrics.metricValue !== null) {
-          const numericMetricValue = Number(metrics.metricValue);
-          record.metricValue = Number.isFinite(numericMetricValue) ? numericMetricValue : metrics.metricValue;
-        }
-
-        const deviceType = String(metrics.deviceType || metrics.device_type || '').trim();
-        if (deviceType) record.deviceType = deviceType;
+        mergeLiveMetricsPayload(nextLive[key], metrics);
       });
 
       const alertList = Array.isArray(alertsResponse)
@@ -445,7 +457,9 @@ export default function TopologyWorkbenchPage() {
 
   const onFilterChange = useCallback((key, value) => {
     if (key === 'entity_id') {
-      setEntityInputValue(String(value || ''));
+      const nextRaw = String(value || '');
+      setEntityInputValue(nextRaw);
+      setFilter('entity_id', nextRaw);
       return;
     }
     setFilter(key, value);
@@ -454,8 +468,8 @@ export default function TopologyWorkbenchPage() {
   const onEntityInputChange = useCallback((value) => {
     const nextRaw = String(value || '');
     setEntityInputValue(nextRaw);
+    setFilter('entity_id', nextRaw);
     if (nextRaw.trim() !== '') return;
-    setFilter('entity_id', '');
     setSelectedEntityId('');
     setInspectorEntityId('');
     setSelectedState(null);
@@ -755,11 +769,11 @@ export default function TopologyWorkbenchPage() {
     const rackIdForNode = selectedNode.type === 'rack'
       ? selectedNode.id
       : selectedNode.parentRackId
-        || baseModel.deviceToRack.get(selectedNode.id)
-        || baseModel.infraToRack.get(selectedNode.id)
-        || selectedNode.attributes?.rack_id
-        || selectedNode.attributes?.rackId
-        || '';
+      || baseModel.deviceToRack.get(selectedNode.id)
+      || baseModel.infraToRack.get(selectedNode.id)
+      || selectedNode.attributes?.rack_id
+      || selectedNode.attributes?.rackId
+      || '';
 
     const hallIdForRack = rackIdForNode ? (baseModel.rackToHall.get(rackIdForNode) || '') : '';
     if (hallIdForRack) parts.push(hallNameById(hallIdForRack));
@@ -839,6 +853,36 @@ export default function TopologyWorkbenchPage() {
   const performanceMode = stats.nodes > 500;
   const showInspectorModal = Boolean(activeInspectorEntityId);
 
+  useEffect(() => {
+    if (!activeInspectorEntityId) return;
+
+    let active = true;
+    const run = async () => {
+      try {
+        const response = await api.get(`/v1/metrics/entity/${encodeURIComponent(activeInspectorEntityId)}`);
+        if (!active) return;
+        const metricsPayload = response?.metrics;
+        if (!metricsPayload || typeof metricsPayload !== 'object') return;
+
+        setEntityLiveMap((prev) => {
+          const next = { ...(prev || {}) };
+          if (!next[activeInspectorEntityId]) {
+            next[activeInspectorEntityId] = createEmptyLiveRecord();
+          }
+          mergeLiveMetricsPayload(next[activeInspectorEntityId], metricsPayload);
+          return next;
+        });
+      } catch {
+        // Keep the most recent successful snapshot.
+      }
+    };
+
+    run();
+    return () => {
+      active = false;
+    };
+  }, [activeInspectorEntityId, liveUpdatedAt]);
+
   return (
     <div className="page-content topology-workspace-page">
       <TopologyFilters
@@ -909,7 +953,7 @@ export default function TopologyWorkbenchPage() {
           <span>Selected: {selectedEntityId || 'none'}</span>
           <span>Live: {liveUpdatedAt ? `updated ${new Date(liveUpdatedAt).toLocaleTimeString()}` : 'waiting'}</span>
         </div>
-        <TopologyLegend className="topology-legend-floating" />
+        <TopologyLegend className="topology-legend-floating" stats={stats} performanceMode={performanceMode} />
         {!loading && !error && stats.nodes === 0 && (
           <div className="topology-empty-overlay">
             No topology nodes are visible. Verify workspace, filters, and data feed.
@@ -984,6 +1028,7 @@ export default function TopologyWorkbenchPage() {
             performanceMode={performanceMode}
           />
         )}
+
       </section>
 
       {showInspectorModal && (

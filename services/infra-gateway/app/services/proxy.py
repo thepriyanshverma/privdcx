@@ -14,7 +14,7 @@ SERVICE_MAP = {
     "device": "http://infra-device:8008/api/v1",
     "devices": "http://infra-device:8008/api/v1",
     "simulation": "http://infra-simulation:8010/api/v1",
-    "metrics": "http://infra-metrics-stream:8011/api/v1",
+    "metrics": "http://infra-metrics-adapter:8016/api/v1",
     "alerts": "http://infra-alert-engine:8012/api/v1",
     "runtime": "http://infra-runtime:8013/api/v1",
     "topology": "http://infra-topology:8015/api/v1/topology",
