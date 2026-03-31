@@ -182,6 +182,21 @@ services:
     init: true
     restart: unless-stopped
 
+  infra-metrics-adapter:
+    build: ./services/infra-metrics-adapter
+    container_name: infraos-metrics-adapter
+    ports:
+      - "8016:8016"
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - REDIS_URL=redis://redis:6379
+      - AGGREGATION_INTERVAL_SECONDS=5
+    depends_on:
+      - prometheus
+      - redis
+    init: true
+    restart: unless-stopped
+
   infra-alert-engine:
     build: ./services/infra-alert-engine
     container_name: infraos-alert-engine
@@ -266,6 +281,7 @@ services:
       - infra-device
       - infra-simulation
       - infra-metrics-stream
+      - infra-metrics-adapter
       - infra-alert-engine
       - infra-runtime
       - infra-topology

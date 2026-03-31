@@ -1273,17 +1273,17 @@ export default function TopologyGraphPage({
                     selectedEntityId,
                     performanceMode,
                   }) && (
-                    <text
-                      x={Number(node.x || 0) + size + 6}
-                      y={Number(node.y || 0) + 3}
-                      className="topology-node-label"
-                      opacity={opacity}
-                    >
-                      {node.displayName}
-                      {isRootCause ? ' [ROOT]' : ''}
-                      {hasAlerts ? ` !${node.alertCount}` : ''}
-                    </text>
-                  )}
+                      <text
+                        x={Number(node.x || 0) + size + 6}
+                        y={Number(node.y || 0) + 3}
+                        className="topology-node-label"
+                        opacity={opacity}
+                      >
+                        {node.displayName}
+                        {isRootCause ? ' [ROOT]' : ''}
+                        {hasAlerts ? ` !${node.alertCount}` : ''}
+                      </text>
+                    )}
 
                   <title>{`${node.displayName} (${node.type}) | ${node.status}`}</title>
                 </g>

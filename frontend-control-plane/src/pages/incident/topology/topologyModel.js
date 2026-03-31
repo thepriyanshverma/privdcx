@@ -33,12 +33,12 @@ const PREFIX_MAP = {
 
 export const NODE_VISUAL = {
   facility: { color: '#7a5cff', size: 18, shape: 'square' },
-  hall: { color: '#6bb7ff', size: 14, shape: 'roundedRect' },
-  rack: { color: '#35d8ff', size: 12, shape: 'rackRect' },
+  hall: { color: '#5A8DEE', size: 14, shape: 'roundedRect' },
+  rack: { color: '#35b3a2', size: 12, shape: 'rackRect' },
   device: { color: '#9ca8b6', size: 5, shape: 'circle' },
   network: { color: '#ff9f40', size: 8, shape: 'diamond' },
   power: { color: '#ffd13d', size: 8, shape: 'hexagon' },
-  cooling: { color: '#23d5be', size: 8, shape: 'triangle' },
+  cooling: { color: '#00E5FF', size: 8, shape: 'triangle' },
   unknown: { color: '#72839a', size: 7, shape: 'circle' },
 };
 
