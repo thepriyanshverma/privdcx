@@ -59,6 +59,7 @@ services:
       - SECRET_KEY=infraos_super_secret_key_for_jwt_32_chars
     depends_on:
       - postgres
+    init: true
     restart: unless-stopped
 
   infra-facility:
@@ -68,8 +69,11 @@ services:
       - "8006:8006"
     environment:
       - DATABASE_URL=postgresql+asyncpg://infraos:infraos_password@postgres:5432/infraos_db
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - TOPOLOGY_EVENTS_TOPIC=infra.topology.events
     depends_on:
       - postgres
+    init: true
     restart: unless-stopped
 
   infra-rack:
@@ -79,8 +83,11 @@ services:
       - "8007:8007"
     environment:
       - DATABASE_URL=postgresql+asyncpg://infraos:infraos_password@postgres:5432/infraos_db
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - TOPOLOGY_EVENTS_TOPIC=infra.topology.events
     depends_on:
       - postgres
+    init: true
     restart: unless-stopped
 
   infra-device:
@@ -90,8 +97,11 @@ services:
       - "8008:8008"
     environment:
       - DATABASE_URL=postgresql+asyncpg://infraos:infraos_password@postgres:5432/infraos_db
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - TOPOLOGY_EVENTS_TOPIC=infra.topology.events
     depends_on:
       - postgres
+    init: true
     restart: unless-stopped
 
   infra-simulation:
@@ -103,17 +113,32 @@ services:
       - MONGO_URL=mongodb://infraos:infraos_password@mongodb:27017
     depends_on:
       - mongodb
+    init: true
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:latest
+    build: ./prometheus
+    image: designdc-prometheus
     container_name: infraos-prometheus
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     depends_on:
       - infra-simulation
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: infraos-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
     restart: unless-stopped
 
   zookeeper:
@@ -154,6 +179,7 @@ services:
     depends_on:
       - prometheus
       - kafka
+    init: true
     restart: unless-stopped
 
   infra-alert-engine:
@@ -165,10 +191,14 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - RABBITMQ_URL=amqp://infraos:infraos_password@rabbitmq:5672/
       - REDIS_URL=redis://redis:6379
+      - MONGODB_URL=mongodb://infraos:infraos_password@mongodb:27017
+      - MONGODB_DATABASE=infraos_telemetry
     depends_on:
       - kafka
       - rabbitmq
       - redis
+      - mongodb
+    init: true
     restart: unless-stopped
 
   infra-runtime:
@@ -180,10 +210,30 @@ services:
       - RABBITMQ_URL=amqp://infraos:infraos_password@rabbitmq:5672/
       - REDIS_URL=redis://redis:6379
       - MONGODB_URL=mongodb://infraos:infraos_password@mongodb:27017
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - TOPOLOGY_EVENTS_TOPIC=infra.topology.events
     depends_on:
       - rabbitmq
       - redis
       - mongodb
+      - kafka
+    init: true
+    restart: unless-stopped
+
+  infra-topology:
+    build: ./services/infra-topology
+    container_name: infraos-topology
+    ports:
+      - "8015:8015"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - TOPOLOGY_EVENTS_TOPIC=infra.topology.events
+      - MONGODB_URL=mongodb://infraos:infraos_password@mongodb:27017
+      - TOPOLOGY_MONGODB_DATABASE=infraos_topology
+    depends_on:
+      - kafka
+      - mongodb
+    init: true
     restart: unless-stopped
 
   infra-invitation:
@@ -198,6 +248,7 @@ services:
     depends_on:
       - postgres
       - infra-tenant
+    init: true
     restart: unless-stopped
 
   infra-gateway:
@@ -217,17 +268,32 @@ services:
       - infra-metrics-stream
       - infra-alert-engine
       - infra-runtime
+      - infra-topology
       - infra-invitation
       - rabbitmq
+    init: true
     restart: unless-stopped
 
-  frontend:
-    build: ./network-sim
-    container_name: infraos-frontend
+  frontend-control-plane:
+    build:
+      context: ./frontend-control-plane
+      dockerfile: Dockerfile
+    container_name: infraos-frontend-control-plane
     ports:
-      - "5173:5173"
+      - "3000:3000"
+    init: true
+    restart: unless-stopped
+
+  infra-testingflow:
+    build: ./services/infra-testingflow
+    container_name: infraos-testingflow
+    ports:
+      - "8020:8020"
     environment:
-      - VITE_API_URL=http://localhost:8000/api/v1
+      - FRONTEND_URL=http://frontend-control-plane:3000
+    depends_on:
+      - frontend-control-plane
+    init: true
     restart: unless-stopped
 
 volumes:

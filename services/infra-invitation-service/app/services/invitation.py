@@ -3,14 +3,16 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Any, Optional, List
 from fastapi import HTTPException
+import os
+import httpx
 from app.repositories.base import InvitationRepository, MembershipRepository
 from app.schemas.domain import InvitationCreate
-from app.models.domain import InvitationStatus, MembershipStatus, hash_token
+from app.models.domain import InvitationStatus, MembershipStatus, ScopeType, hash_token
 
 
 # Role hierarchy for RBAC enforcement
-MANAGEMENT_ROLES = {"org_owner", "workspace_owner", "infra_architect"}
-OWNER_ROLES = {"org_owner", "workspace_owner"}
+MANAGEMENT_ROLES = {"org_owner", "org_admin", "workspace_owner", "infra_architect"}
+OWNER_ROLES = {"org_owner", "org_admin", "workspace_owner"}
 
 
 class InvitationService:
@@ -39,10 +41,12 @@ class InvitationService:
 
         raw_token = secrets.token_urlsafe(48)
         token_hash = hash_token(raw_token)
+        code = secrets.token_hex(6).upper() # 12-char alphanumeric code
 
         expires_at = datetime.utcnow() + timedelta(days=invite_in.expires_in_days or 7)
 
         invite_data = {
+            "code": code,
             "email": invite_in.email,
             "role": invite_in.role,
             "scope_type": invite_in.scope_type,
@@ -113,6 +117,20 @@ class InvitationService:
         await self.inv_repo.session.commit()
         await self.inv_repo.session.refresh(invite)
 
+        # Notify Tenant Service about Org Membership if applicable
+        if invite.scope_type == ScopeType.ORG:
+            tenant_url = os.getenv("TENANT_SERVICE_URL", "http://infra-tenant:8005/api/v1")
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.post(
+                        f"{tenant_url}/organizations/{invite.scope_id}/members",
+                        params={"user_id": str(caller_user_id), "role": invite.role},
+                        timeout=5.0
+                    )
+            except Exception as e:
+                # Log error but don't fail acceptance if sync fails (can be reconciled later)
+                print(f"ERROR: Failed to sync org membership to tenant service: {e}")
+
         return invite
 
     async def revoke_invitation(
@@ -153,3 +171,36 @@ class InvitationService:
         if viewer_role not in MANAGEMENT_ROLES:
             raise HTTPException(status_code=403, detail="Insufficient role to view invitations.")
         return await self.inv_repo.list_for_workspace(workspace_id, viewer_role, viewer_user_id)
+
+    async def get_organization_members(self, org_id: uuid.UUID, auth_token: Optional[str] = None) -> List[Any]:
+        """Fetch organization members from Tenant Service."""
+        tenant_url = os.getenv("TENANT_SERVICE_URL", "http://infra-tenant:8005/api/v1")
+        headers = {}
+        if auth_token:
+            headers["Authorization"] = f"Bearer {auth_token}"
+            
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{tenant_url}/organizations/{org_id}/members", 
+                    headers=headers,
+                    timeout=5.0
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                print(f"DEBUG: Tenant service returned {resp.status_code} for org members")
+                return []
+        except Exception as e:
+            print(f"ERROR: Failed to fetch org members: {e}")
+            return []
+
+    async def get_organization_invitations(
+        self,
+        org_id: uuid.UUID,
+        viewer_role: str,
+        viewer_user_id: uuid.UUID,
+    ) -> List[Any]:
+        # Org management roles: org_owner, org_admin
+        if viewer_role not in {"org_owner", "org_admin"}:
+            raise HTTPException(status_code=403, detail="Insufficient role to view organization invitations.")
+        return await self.inv_repo.list_for_organization(org_id, viewer_role, viewer_user_id)

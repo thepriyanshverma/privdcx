@@ -10,13 +10,14 @@ from app.models.domain import InvitationStatus, ScopeType, MembershipStatus
 class InvitationCreate(BaseModel):
     email: EmailStr
     role: str
-    scope_type: ScopeType
-    scope_id: uuid.UUID
+    scope_type: Optional[ScopeType] = None  # Router always overrides this
+    scope_id: Optional[uuid.UUID] = None    # Router always overrides this
     expires_in_days: Optional[int] = 7
 
 
 class InvitationRead(BaseModel):
     id: uuid.UUID
+    code: str
     email: str
     role: str
     scope_type: ScopeType

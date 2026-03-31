@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import Base
-from app.models.domain import User, Organization, Workspace, Subscription, LogicalSpace, RoleAssignment
+from app.models.domain import User, Organization, Workspace, Subscription, LogicalSpace, RoleAssignment, OrganizationMembership, RoleName, ScopeType
 
 T = TypeVar("T", bound=Base)
 
@@ -55,6 +55,15 @@ class OrganizationRepository(BaseRepository[Organization]):
     def __init__(self, session: AsyncSession):
         super().__init__(Organization, session)
 
+    async def list_by_user(self, user_id: uuid.UUID) -> List[Organization]:
+        # Join with memberships to find orgs the user belongs to
+        result = await self.session.execute(
+            select(Organization)
+            .join(OrganizationMembership, Organization.id == OrganizationMembership.organization_id)
+            .where(OrganizationMembership.user_id == user_id)
+        )
+        return result.scalars().all()
+
 class WorkspaceRepository(BaseRepository[Workspace]):
     def __init__(self, session: AsyncSession):
         super().__init__(Workspace, session)
@@ -78,3 +87,35 @@ class RoleAssignmentRepository(BaseRepository[RoleAssignment]):
     async def list_by_user(self, user_id: uuid.UUID) -> List[RoleAssignment]:
         result = await self.session.execute(select(RoleAssignment).filter_by(user_id=user_id))
         return result.scalars().all()
+
+class OrganizationMembershipRepository(BaseRepository[OrganizationMembership]):
+    def __init__(self, session: AsyncSession):
+        super().__init__(OrganizationMembership, session)
+
+    async def list_by_user(self, user_id: uuid.UUID) -> List[OrganizationMembership]:
+        result = await self.session.execute(select(OrganizationMembership).filter_by(user_id=user_id))
+        return result.scalars().all()
+
+    async def get_membership(self, user_id: uuid.UUID, org_id: uuid.UUID) -> Optional[OrganizationMembership]:
+        result = await self.session.execute(
+            select(OrganizationMembership).filter_by(user_id=user_id, organization_id=org_id)
+        )
+        return result.scalars().first()
+
+    async def list_members(self, org_id: uuid.UUID) -> List[Any]:
+        # Join with User to get email and name for the schema
+        result = await self.session.execute(
+            select(
+                OrganizationMembership.id,
+                OrganizationMembership.user_id,
+                OrganizationMembership.organization_id,
+                User.email.label("user_email"),
+                User.full_name,
+                OrganizationMembership.role,
+                OrganizationMembership.status,
+                OrganizationMembership.joined_at
+            )
+            .join(User, OrganizationMembership.user_id == User.id)
+            .where(OrganizationMembership.organization_id == org_id)
+        )
+        return result.all()

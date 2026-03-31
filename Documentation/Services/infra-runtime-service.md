@@ -43,9 +43,10 @@ Built using **NetworkX**, the service maintains a physical topology graph:
 - **MongoDB (Timeline History):** Stores every state change and remediation action as a time-indexed document, enabling temporal "playback" of failures.
 
 ## 7. Control API Design
-- `GET /state/{id}`: Live operational status retrieval.
-- `POST /remediation/pause`: Suspends autonomous actions for manual override.
-- `POST /state/snapshot`: Generates a point-in-time state of the entire facility.
+- `GET /api/v1/state/{id}`: Live operational status retrieval.
+- `POST /api/v1/remediation/pause`: Suspends autonomous actions for manual override.
+- `POST /api/v1/remediation/resume`: Restarts autonomous remediation actions.
+- `POST /api/v1/state/snapshot`: Generates a point-in-time state of the entire facility.
 
 ## 8. Example Remediation Flow
 1. **Trigger:** `Alert Engine` publishes `alert.critical.thermal_critical` for `Rack_A`.

@@ -41,6 +41,7 @@ class DeviceBase(BaseModel):
     rack_id: uuid.UUID
     template_id: uuid.UUID
     cluster_id: Optional[uuid.UUID] = None
+    device_type: Optional[DeviceType] = None
     status: DeviceStatus = DeviceStatus.ACTIVE
     start_u: int
     size_u: int

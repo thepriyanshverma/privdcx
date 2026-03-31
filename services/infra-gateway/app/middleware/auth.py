@@ -15,8 +15,17 @@ class AuthMiddleware:
         if request.method == "OPTIONS":
             return await call_next(request)
             
-        public_paths = ["/health", "/metrics", "/docs", "/openapi.json", "/auth/register", "/auth/login"]
-        if any(path in request.url.path for path in public_paths):
+        public_paths = [
+            "/health",
+            "/metrics",
+            "/docs",
+            "/openapi.json",
+            "/auth/register",
+            "/auth/login",
+            "/api/v1/timeline",
+            "/api/v1/topology",
+        ]
+        if any(path in request.url.path for path in public_paths) or request.url.path.startswith("/ws/"):
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization")
@@ -28,34 +37,49 @@ class AuthMiddleware:
             )
 
         token = auth_header.split(" ")[1]
-        print(f"DEBUG Auth: Processing token: {token[:10]}...{token[-10:]}")
         try:
-            # Debug log (Remove in production)
-            print(f"DEBUG Auth: Attempting to decode token with secret starting with: {JWT_SECRET[:5]}...")
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            print(f"DEBUG Auth: Decoded payload: {payload}")
-            
-            # Inject headers for downstream services (if present)
-            tenant_id = payload.get("tenant_id")
-            workspace_id = payload.get("workspace_id")
-            org_id = payload.get("org_id")
-            
-            # Store in request state for internal use
             request.state.user = payload
             
-            # Note: Standard FastAPI middleware can't easily modify request headers 
-            # for the NEXT call in a proxy scenario without a custom wrapper.
-            # We'll use these values in our Proxy service.
+            # ─── Org & Workspace Context Enforcement ─────────────────────────────
+            path = request.url.path
             
+            # 1. Public Paths (already skipped above)
+            
+            # 2. Infra / Control Plane Paths (Strict Org + Workspace Required)
+            # These paths belong to actual hardware/runtime services
+            infra_prefixes = [
+                "/api/v1/racks", "/api/v1/devices", "/api/v1/facilities", 
+                "/api/v1/simulations", "/api/v1/metrics", "/api/v1/alerts", "/api/v1/topology"
+            ]
+            
+            # 3. Workspace Selection Paths (Org Required)
+            workspace_prefixes = ["/api/v1/tenants/workspaces"]
+
+            org_id = payload.get("org_id")
+            workspace_id = payload.get("workspace_id")
+
+            # Check Infra Requirements
+            if any(path.startswith(prefix) for prefix in infra_prefixes):
+                if not org_id or not workspace_id:
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse(
+                        status_code=403, 
+                        content={"detail": "Context Required: Organization and Workspace selection mandatory for control plane access."}
+                    )
+
+            # Check Workspace Requirements
+            if any(path.startswith(prefix) for prefix in workspace_prefixes):
+                # GET /workspaces?org_id= is allowed, but we can enforce it's in the token if we want strict session
+                # For now, let's just ensure if they are trying to DO something infra-related, they have context
+                pass
+
             return await call_next(request)
             
         except jwt.ExpiredSignatureError:
             from fastapi.responses import JSONResponse
             return JSONResponse(status_code=401, content={"detail": "Token expired"})
         except jwt.InvalidTokenError as e:
-            print(f"DEBUG Auth: Invalid Token Error: {e}")
-            print(f"DEBUG Auth: Token Length: {len(token)}")
-            print(f"DEBUG Auth: Full Token: {token}")
             from fastapi.responses import JSONResponse
             return JSONResponse(status_code=401, content={"detail": "Invalid token"})
 

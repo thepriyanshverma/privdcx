@@ -31,6 +31,17 @@ class BaseRepository(Generic[T]):
             await self.session.rollback()
             raise
 
+    async def update(self, id: uuid.UUID, obj_in_data: dict) -> Optional[T]:
+        try:
+            await self.session.execute(
+                update(self.model).where(self.model.id == id).values(**obj_in_data)
+            )
+            await self.session.commit()
+            return await self.get(id)
+        except Exception:
+            await self.session.rollback()
+            raise
+
     async def delete(self, id: uuid.UUID) -> bool:
         try:
             result = await self.session.execute(delete(self.model).where(self.model.id == id))
@@ -52,6 +63,22 @@ class DeviceRepository(BaseRepository[Device]):
 
     async def list_by_cluster(self, cluster_id: uuid.UUID) -> List[Device]:
         result = await self.session.execute(select(Device).filter_by(cluster_id=cluster_id))
+        return result.scalars().all()
+
+    async def list_filtered(
+        self,
+        workspace_id: Optional[uuid.UUID] = None,
+        rack_id: Optional[uuid.UUID] = None,
+        skip: int = 0,
+        limit: int = 1000,
+    ) -> List[Device]:
+        stmt = select(Device).where(Device.deleted_at == None)  # noqa: E711
+        if workspace_id:
+            stmt = stmt.where(Device.workspace_id == workspace_id)
+        if rack_id:
+            stmt = stmt.where(Device.rack_id == rack_id)
+        stmt = stmt.offset(skip).limit(limit)
+        result = await self.session.execute(stmt)
         return result.scalars().all()
 
 class TemplateRepository(BaseRepository[DeviceTemplate]):

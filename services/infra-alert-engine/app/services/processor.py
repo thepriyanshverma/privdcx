@@ -1,53 +1,125 @@
 import asyncio
-from typing import List
+import uuid
+
+import structlog
+from pydantic import ValidationError
+
 from app.clients.kafka_consumer import KafkaAlertConsumer
+from app.clients.mongo import MongoAlertStore
 from app.clients.rabbitmq import RabbitMQDispatcher
-from app.engines.rules import RuleEngine
 from app.engines.locks import AlertLockManager
-from app.schemas.alerts import AlertRule
+from app.engines.rules import RuleEngine
+from app.schemas.alerts import InfraAlertEvent, MetricStreamEvent
+
 
 class AlertProcessor:
     def __init__(self):
         self.consumer = KafkaAlertConsumer()
         self.dispatcher = RabbitMQDispatcher()
         self.lock_manager = AlertLockManager()
-        self.rule_engine = RuleEngine([]) # Initially empty, filled by manager
+        self.mongo_store = MongoAlertStore()
+        self.rule_engine = RuleEngine()
         self.is_paused = False
         self.running = False
+        self._task: asyncio.Task | None = None
+        self.logger = structlog.get_logger("infra-alert-engine.processor")
 
-    async def start(self):
-        self.running = True
+        self.metrics_events_seen_total = 0
+        self.alerts_evaluated_total = 0
+        self.alerts_published_total = 0
+        self.alerts_suppressed_total = 0
+        self.alerts_persisted_total = 0
+
+    async def start(self) -> None:
         await self.consumer.start()
         await self.dispatcher.connect()
-        asyncio.create_task(self._run())
+        await self.mongo_store.ensure_indexes()
+        self.running = True
+        self._task = asyncio.create_task(self._run(), name="infra-alert-engine-loop")
 
-    async def stop(self):
+    async def stop(self) -> None:
         self.running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
         await self.consumer.stop()
         await self.dispatcher.close()
         await self.lock_manager.close()
+        await self.mongo_store.close()
 
-    async def _run(self):
-        await self.consumer.consume(self._handle_metric)
+    async def _run(self) -> None:
+        await self.consumer.consume_batches(self._handle_metric_event)
 
-    async def _handle_metric(self, metric_event: dict):
-        """
-        Main pipeline: Kafka -> Rule Engine -> Redis Lock -> RabbitMQ Publish
-        """
+    async def _handle_metric_event(self, raw_event: dict) -> None:
         if self.is_paused:
             return
 
-        # 1. Evaluate rules
-        alerts = self.rule_engine.evaluate(metric_event)
-        
-        for alert in alerts:
-            # 2. Check Redis Lock (Suppression/Deduplication)
-            entity_id = self.lock_manager.get_entity_id(metric_event)
-            if await self.lock_manager.is_locked(alert.tenant_id, entity_id, alert.rule_id):
-                continue # Suppressed
-                
-            # 3. Publish to RabbitMQ
+        try:
+            metric_event = MetricStreamEvent.model_validate(raw_event)
+        except ValidationError as exc:
+            self.logger.warning("invalid_metric_event_skipped", error=str(exc), event=raw_event)
+            return
+
+        self.metrics_events_seen_total += 1
+
+        matched_rules = self.rule_engine.evaluate_event(metric_event)
+        if not matched_rules:
+            return
+
+        entity_id, entity_type = self.lock_manager.resolve_entity(metric_event)
+        self.alerts_evaluated_total += len(matched_rules)
+
+        for rule in matched_rules:
+            is_locked = await self.lock_manager.is_locked(metric_event.tenant_id, entity_id, rule.rule_id)
+            if is_locked:
+                self.alerts_suppressed_total += 1
+                continue
+
+            alert = InfraAlertEvent(
+                trace_id=f"trace-{uuid.uuid4().hex}",
+                tenant_id=metric_event.tenant_id,
+                workspace_id=metric_event.workspace_id,
+                facility_id=metric_event.facility_id,
+                entity_id=entity_id,
+                entity_type=entity_type,
+                severity=rule.severity,
+                rule_id=rule.rule_id,
+                metric_name=metric_event.metric_name,
+                metric_value=metric_event.value,
+                description=rule.description,
+                operator=rule.operator,
+                threshold=rule.threshold,
+                deviation_pct=((metric_event.value - rule.threshold) / rule.threshold * 100.0) if rule.threshold else None,
+                queue_time=metric_event.timestamp,
+                raw_metric_event=metric_event.model_dump(),
+                rack_id=metric_event.rack_id,
+                device_id=metric_event.device_id,
+            )
+
+            # Persist history before transient publish so alerts remain visible for UI/audit.
+            alert_id = await self.mongo_store.insert_alert(alert)
+            alert.alert_id = alert_id
+            self.alerts_persisted_total += 1
+
             await self.dispatcher.publish_alert(alert)
-            
-            # 4. Apply Lock (TTL suppression)
-            await self.lock_manager.lock(alert.tenant_id, entity_id, alert.rule_id, ttl_s=60)
+            self.alerts_published_total += 1
+            await self.lock_manager.lock(
+                tenant_id=metric_event.tenant_id,
+                entity_id=entity_id,
+                rule_id=rule.rule_id,
+                ttl_s=rule.cooldown_sec,
+            )
+
+            self.logger.info(
+                "alert_published",
+                rule_id=rule.rule_id,
+                metric_name=metric_event.metric_name,
+                metric_value=metric_event.value,
+                entity_id=entity_id,
+                entity_type=entity_type.value,
+                severity=rule.severity.value,
+            )

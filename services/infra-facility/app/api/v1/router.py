@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.services.topology import TopologyService
+from app.services.topology_events import publish_topology_event
 from app.schemas.domain import (
     FacilityCreate, FacilityRead, 
     HallCreate, HallRead, HallBase,
@@ -16,9 +17,24 @@ router = APIRouter()
 
 # --- Facilities ---
 @router.post("/facilities", response_model=FacilityRead)
-async def create_facility(fac_in: FacilityCreate, db: AsyncSession = Depends(get_db)):
+async def create_facility(fac_in: FacilityCreate, request: Request, db: AsyncSession = Depends(get_db)):
     service = TopologyService(db)
-    return await service.create_facility(fac_in)
+    facility = await service.create_facility(fac_in)
+    await publish_topology_event(
+        {
+            "event": "FACILITY_CREATED",
+            "workspace_id": str(facility.workspace_id),
+            "org_id": request.headers.get("X-Org-Id"),
+            "facility_id": str(facility.id),
+            "metadata": {
+                "name": facility.name,
+                "cooling_type": str(facility.cooling_type.value if hasattr(facility.cooling_type, "value") else facility.cooling_type),
+                "width_m": facility.width_m,
+                "length_m": facility.length_m,
+            },
+        }
+    )
+    return facility
 
 @router.get("/facilities/{id}", response_model=FacilityRead)
 async def get_facility(id: uuid.UUID, db: AsyncSession = Depends(get_db)):

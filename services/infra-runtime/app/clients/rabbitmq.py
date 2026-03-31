@@ -51,7 +51,7 @@ class RabbitMQClient:
         Publishes an infra.state.updated event to the command bus.
         """
         exchange = await self.channel.get_exchange("infra.state")
-        routing_key = f"state.updated.{event.entity_type}.{event.entity_id.lower()}"
+        routing_key = f"state.updated.{event.entity_type}"
         
         await exchange.publish(
             aio_pika.Message(body=event.model_dump_json().encode()),

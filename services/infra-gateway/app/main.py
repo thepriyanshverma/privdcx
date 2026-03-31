@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException, Query
 from contextlib import asynccontextmanager
 from app.services.proxy import ServiceProxy
 from app.services.web_sockets import WebSocketManager
@@ -77,6 +77,10 @@ async def gateway_cors_and_auth(request: Request, call_next):
             }
         )
 
+    # Bypass for WebSockets - they are handled in the specialized websocket_endpoint
+    if request.headers.get("upgrade", "").lower() == "websocket":
+        return await call_next(request)
+
     # Proceed to Authentication
     try:
         response = await auth_middleware(request, call_next)
@@ -114,6 +118,39 @@ async def dashboard_overview(request: Request):
         headers["X-Workspace-Id"] = str(workspace_id)
         
     return await aggregator.get_dashboard_summary(headers)
+
+
+@app.get("/api/v1/timeline")
+async def infra_timeline(
+    request: Request,
+    workspace_id: str | None = Query(default=None),
+    facility_id: str | None = Query(default=None),
+    entity_id: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    """
+    Unified infra lifecycle timeline endpoint:
+    Metric -> Alert -> Queue -> Runtime -> Verification -> Resolution
+    """
+    user_payload = getattr(request.state, "user", {}) or {}
+
+    derived_workspace_id = workspace_id or user_payload.get("workspace_id")
+    if not derived_workspace_id:
+        raise HTTPException(status_code=400, detail="workspace_id is required")
+
+    headers = {}
+    tenant_id = user_payload.get("tenant_id")
+    if tenant_id and str(tenant_id).lower() != "none":
+        headers["X-Tenant-Id"] = str(tenant_id)
+    headers["X-Workspace-Id"] = str(derived_workspace_id)
+
+    return await aggregator.get_timeline(
+        headers=headers,
+        workspace_id=str(derived_workspace_id),
+        facility_id=facility_id,
+        entity_id=entity_id,
+        limit=limit,
+    )
 
 @app.websocket("/ws/infra-state")
 async def websocket_endpoint(websocket: WebSocket):

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import router as api_v1_router
+from app.services.topology_events import start_topology_events, stop_topology_events
 
 app = FastAPI(title="InfraOS Device Inventory & Slot Mapping", version="1.0.0")
 
@@ -9,6 +10,12 @@ async def startup():
     from app.core.database import engine, Base
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await start_topology_events()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await stop_topology_events()
 
 app.add_middleware(
     CORSMiddleware,
