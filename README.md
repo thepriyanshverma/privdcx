@@ -69,6 +69,7 @@ The platform is fully containerized with **Docker Compose**, managing 14+ bespok
 
 ```bash
 docker-compose up --build
+```
 
 ## 🚀 Screenshots
 <img width="1771" height="841" alt="Screenshot 2026-03-31 221339" src="https://github.com/user-attachments/assets/b95f213d-e5d9-402f-b009-0ac0fcc68a2d" />
